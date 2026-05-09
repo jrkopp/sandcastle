@@ -1227,14 +1227,15 @@ npm run typecheck # Type-check
 
 If you're developing Sandcastle locally and want to test your changes in a real project before publishing, use the following steps.
 
-**Step 1: Build the package** (from the sandcastle repo)
+**Step 1: Build the package** (from the sandcastle repo root)
 
 ```bash
-cd /home/john/code/references/sandcastle
 npx tsgo --project tsconfig.build.json --noEmitOnError false
 npm run postbuild   # copies templates into dist/
 npm pack            # creates ai-hero-sandcastle-<version>.tgz
 ```
+
+> Note: there are a small number of pre-existing type errors in optional provider integrations (e.g. `daytona.ts`). The `--noEmitOnError false` flag allows the build to complete despite them.
 
 **Step 2: Install the tarball in your target project**
 
@@ -1242,15 +1243,17 @@ With npm:
 
 ```bash
 cd /path/to/your-project
-npm install --save-dev /home/john/code/references/sandcastle/ai-hero-sandcastle-<version>.tgz
+npm install --save-dev /absolute/path/to/sandcastle/ai-hero-sandcastle-<version>.tgz
 ```
 
 With pnpm:
 
 ```bash
 cd /path/to/your-project
-pnpm add --save-dev /home/john/code/references/sandcastle/ai-hero-sandcastle-<version>.tgz
+pnpm add --save-dev /absolute/path/to/sandcastle/ai-hero-sandcastle-<version>.tgz
 ```
+
+> ⚠️ **Docker projects:** Installing via a local file path stores that absolute path in `package.json`. When Sandcastle runs `npm install` inside Docker containers (via the `onSandboxReady` hook), the container cannot resolve this host-only path and the install will fail. To avoid this, remove `@ai-hero/sandcastle` from the project's `devDependencies` in `package.json` after installing — the package is already in `node_modules` (copied from the host via `copyToWorktree`) and is not needed inside the container.
 
 > ⚠️ If your target project has a `"docker": "link:@ai-hero/sandcastle/sandboxes/docker"` entry in `package.json` (added by a previous pnpm install), remove it first — it is not needed and will cause `npm` to error with `EUNSUPPORTEDPROTOCOL`.
 

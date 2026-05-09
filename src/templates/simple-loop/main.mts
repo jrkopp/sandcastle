@@ -5,6 +5,11 @@ import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 // Run this with: npx tsx .sandcastle/main.mts
 // Or add to package.json scripts: "sandcastle": "npx tsx .sandcastle/main.mts"
 
+// Agent provider — swap this out to use a different agent, e.g.:
+//   copilotCli("claude-sonnet-4.6")
+//   codex("codex-mini-latest")
+const agent = claudeCode("claude-sonnet-4-6");
+
 await run({
   // A name for this run, shown as a prefix in log output.
   name: "worker",
@@ -12,10 +17,8 @@ await run({
   // Sandbox provider — Docker is the default runtime.
   sandbox: docker(),
 
-  // The agent provider. Pass a model string to claudeCode() — sonnet balances
-  // capability and speed for most tasks. Switch to claude-opus-4-6 for harder
-  // problems, or claude-haiku-4-5-20251001 for speed.
-  agent: claudeCode("claude-sonnet-4-6"),
+  // The agent provider configured above.
+  agent,
 
   // Path to the prompt file. Shell expressions inside are evaluated inside the
   // sandbox at the start of each iteration, so the agent always sees fresh data.

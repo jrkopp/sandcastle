@@ -30,6 +30,12 @@ import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 // Each cycle works on one issue. Raise this to process more issues per run.
 const MAX_ITERATIONS = 10;
 
+// Agent provider used for both the implementer and reviewer phases.
+// Swap this out to use a different agent, e.g.:
+//   sandcastle.copilotCli("claude-sonnet-4.6")
+//   sandcastle.codex("codex-mini-latest")
+const agent = sandcastle.claudeCode("claude-sonnet-4-6");
+
 // Hooks run inside the sandbox before the agent starts each iteration.
 // npm install ensures the sandbox always has fresh dependencies.
 const hooks = {
@@ -73,7 +79,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     const implement = await sandbox.run({
       name: "implementer",
       maxIterations: 100,
-      agent: sandcastle.claudeCode("claude-sonnet-4-6"),
+      agent,
       promptFile: "./.sandcastle/implement-prompt.md",
     });
 
@@ -95,7 +101,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     await sandbox.run({
       name: "reviewer",
       maxIterations: 1,
-      agent: sandcastle.claudeCode("claude-sonnet-4-6"),
+      agent,
       promptFile: "./.sandcastle/review-prompt.md",
       promptArgs: {
         BRANCH: branch,
