@@ -708,7 +708,7 @@ describe("InitService scaffold", () => {
 
   // --- createLabel option ---
 
-  it("simple-loop prompt.md retains --label Sandcastle when createLabel is true", async () => {
+  it("simple-loop prompt.md retains --label ready-for-agent when createLabel is true", async () => {
     const dir = await makeDir();
     await runScaffold(dir, { templateName: "simple-loop", createLabel: true });
 
@@ -716,10 +716,10 @@ describe("InitService scaffold", () => {
       join(dir, ".sandcastle", "prompt.md"),
       "utf-8",
     );
-    expect(prompt).toContain("--label Sandcastle");
+    expect(prompt).toContain("--label ready-for-agent");
   });
 
-  it("simple-loop prompt.md strips --label Sandcastle when createLabel is false", async () => {
+  it("simple-loop prompt.md strips --label ready-for-agent when createLabel is false", async () => {
     const dir = await makeDir();
     await runScaffold(dir, { templateName: "simple-loop", createLabel: false });
 
@@ -727,14 +727,14 @@ describe("InitService scaffold", () => {
       join(dir, ".sandcastle", "prompt.md"),
       "utf-8",
     );
-    expect(prompt).not.toContain("--label Sandcastle");
+    expect(prompt).not.toContain("--label ready-for-agent");
     // The gh issue list command should still be valid
     expect(prompt).toContain("gh issue list");
     // No double spaces in gh commands from removal
     expect(prompt).not.toMatch(/gh issue list {2}/);
   });
 
-  it("parallel-planner plan-prompt.md strips --label Sandcastle when createLabel is false", async () => {
+  it("parallel-planner plan-prompt.md strips --label ready-for-agent when createLabel is false", async () => {
     const dir = await makeDir();
     await runScaffold(dir, {
       templateName: "parallel-planner",
@@ -745,11 +745,11 @@ describe("InitService scaffold", () => {
       join(dir, ".sandcastle", "plan-prompt.md"),
       "utf-8",
     );
-    expect(prompt).not.toContain("--label Sandcastle");
+    expect(prompt).not.toContain("--label ready-for-agent");
     expect(prompt).toContain("gh issue list");
   });
 
-  it("sequential-reviewer implement-prompt.md strips --label Sandcastle when createLabel is false", async () => {
+  it("sequential-reviewer implement-prompt.md strips --label ready-for-agent when createLabel is false", async () => {
     const dir = await makeDir();
     await runScaffold(dir, {
       templateName: "sequential-reviewer",
@@ -760,7 +760,7 @@ describe("InitService scaffold", () => {
       join(dir, ".sandcastle", "implement-prompt.md"),
       "utf-8",
     );
-    expect(prompt).not.toContain("--label Sandcastle");
+    expect(prompt).not.toContain("--label ready-for-agent");
     expect(prompt).toContain("gh issue list");
   });
 
@@ -792,7 +792,7 @@ describe("InitService scaffold", () => {
       join(dir, ".sandcastle", "prompt.md"),
       "utf-8",
     );
-    expect(prompt).toContain("--label Sandcastle");
+    expect(prompt).toContain("--label ready-for-agent");
   });
 
   it("unknown template name throws a clear error", async () => {
@@ -1244,7 +1244,7 @@ describe("InitService scaffold", () => {
       expect(prompt).not.toContain("{{CLOSE_TASK_COMMAND}}");
     });
 
-    it("simple-loop with beads skips --label Sandcastle (no label to strip)", async () => {
+    it("simple-loop with beads skips --label ready-for-agent (no label to strip)", async () => {
       const dir = await makeDir();
       await runScaffold(dir, {
         templateName: "simple-loop",
@@ -1255,10 +1255,10 @@ describe("InitService scaffold", () => {
         join(dir, ".sandcastle", "prompt.md"),
         "utf-8",
       );
-      expect(prompt).not.toContain("--label Sandcastle");
+      expect(prompt).not.toContain("--label ready-for-agent");
     });
 
-    it("simple-loop with github-issues retains --label Sandcastle when createLabel is true", async () => {
+    it("simple-loop with github-issues retains --label ready-for-agent when createLabel is true", async () => {
       const dir = await makeDir();
       await runScaffold(dir, {
         templateName: "simple-loop",
@@ -1270,10 +1270,10 @@ describe("InitService scaffold", () => {
         join(dir, ".sandcastle", "prompt.md"),
         "utf-8",
       );
-      expect(prompt).toContain("--label Sandcastle");
+      expect(prompt).toContain("--label ready-for-agent");
     });
 
-    it("simple-loop with github-issues strips --label Sandcastle when createLabel is false", async () => {
+    it("simple-loop with github-issues strips --label ready-for-agent when createLabel is false", async () => {
       const dir = await makeDir();
       await runScaffold(dir, {
         templateName: "simple-loop",
@@ -1285,7 +1285,7 @@ describe("InitService scaffold", () => {
         join(dir, ".sandcastle", "prompt.md"),
         "utf-8",
       );
-      expect(prompt).not.toContain("--label Sandcastle");
+      expect(prompt).not.toContain("--label ready-for-agent");
       expect(prompt).toContain("gh issue list");
     });
 

@@ -190,6 +190,50 @@ WORKDIR /home/agent
 ENTRYPOINT ["sleep", "infinity"]
 `;
 
+const COPILOT_CLI_DOCKERFILE = `FROM node:22-bookworm
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \\
+  git \\
+  curl \\
+  jq \\
+  && rm -rf /var/lib/apt/lists/*
+
+# Install the GitHub Copilot CLI binary.
+# Node.js is already available in the base image.
+# Authentication uses the COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN env var
+# injected at container start time — no credentials needed during build.
+RUN npm install -g @github/copilot
+
+# Install GitHub CLI (gh) — useful for prompt-file shell commands and GitHub operations
+# inside the sandbox. Authentication uses the GH_TOKEN env var at runtime.
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \\
+  | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \\
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \\
+  | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \\
+  && apt-get update && apt-get install -y gh \\
+  && rm -rf /var/lib/apt/lists/*
+
+{{BACKLOG_MANAGER_TOOLS}}
+
+# Build-args for UID/GID alignment: sandcastle docker build-image
+# defaults these to the host user's UID/GID so image-built files
+# and bind-mounted files share an owner without runtime chown.
+ARG AGENT_UID=1000
+ARG AGENT_GID=1000
+
+# Rename the base image's "node" user to "agent" and align UID/GID.
+RUN groupmod -g $AGENT_GID node && usermod -u $AGENT_UID -g $AGENT_GID -d /home/agent -m -l agent node
+USER \${AGENT_UID}:\${AGENT_GID}
+
+WORKDIR /home/agent
+
+# In worktree sandbox mode, Sandcastle bind-mounts the git worktree at ${SANDBOX_REPO_DIR}
+# and overrides the working directory to ${SANDBOX_REPO_DIR} at container start.
+# Structure your Dockerfile so that ${SANDBOX_REPO_DIR} can serve as the project root.
+ENTRYPOINT ["sleep", "infinity"]
+`;
+
 const AGENT_REGISTRY: AgentEntry[] = [
   {
     name: "claude-code",
@@ -227,6 +271,16 @@ OPENAI_KEY=`,
     dockerfileTemplate: OPENCODE_DOCKERFILE,
     envExample: `# OpenCode API key
 OPENCODE_API_KEY=`,
+  },
+  {
+    name: "copilot-cli",
+    label: "GitHub Copilot CLI",
+    defaultModel: "claude-sonnet-4.6",
+    factoryImport: "copilotCli",
+    dockerfileTemplate: COPILOT_CLI_DOCKERFILE,
+    envExample: `# GitHub personal access token with Copilot access
+# Also covers gh issue commands if using the GitHub Issues backlog manager
+GH_TOKEN=`,
   },
 ];
 
@@ -276,7 +330,7 @@ const BACKLOG_MANAGER_REGISTRY: BacklogManagerEntry[] = [
     name: "github-issues",
     label: "GitHub Issues",
     templateArgs: {
-      LIST_TASKS_COMMAND: `gh issue list --state open --label Sandcastle --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`,
+      LIST_TASKS_COMMAND: `gh issue list --state open --label ready-for-agent --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`,
       VIEW_TASK_COMMAND: "gh issue view <ID>",
       CLOSE_TASK_COMMAND: `gh issue close <ID> --comment "Completed by Sandcastle"`,
       BACKLOG_MANAGER_TOOLS: GITHUB_CLI_TOOLS,
@@ -496,7 +550,7 @@ const rewriteMainTs = (
   });
 
 /**
- * When the user opted out of the Sandcastle label, strip ` --label Sandcastle`
+ * When the user opted out of the ready-for-agent label, strip ` --label ready-for-agent`
  * from all `.md` files in the scaffolded config directory so that `gh issue list`
  * commands work without a label filter.
  */
@@ -516,7 +570,7 @@ const rewritePromptFiles = (
           const content = yield* fs
             .readFileString(filePath)
             .pipe(Effect.mapError((e) => new Error(e.message)));
-          const updated = content.replace(/ --label Sandcastle/g, "");
+          const updated = content.replace(/ --label ready-for-agent/g, "");
           if (updated !== content) {
             yield* fs
               .writeFileString(filePath, updated)
@@ -667,12 +721,25 @@ export const scaffold = (
 
     const templateDir = yield* getTemplateDir(templateName);
 
-    // Build .env.example from agent + backlog manager env blocks
+    // Build .env.example from agent + backlog manager env blocks, deduplicating keys
     const envExampleParts = [agent.envExample];
     if (backlogManager.envExample) {
       envExampleParts.push(backlogManager.envExample);
     }
-    const envExampleContent = envExampleParts.join("\n") + "\n";
+    // Deduplicate: if the same KEY= appears in both blocks, keep only the first occurrence
+    const seenKeys = new Set<string>();
+    const deduplicatedLines: string[] = [];
+    for (const part of envExampleParts) {
+      for (const line of part.split("\n")) {
+        const keyMatch = line.match(/^([A-Z0-9_]+)=/);
+        if (keyMatch) {
+          if (seenKeys.has(keyMatch[1])) continue;
+          seenKeys.add(keyMatch[1]);
+        }
+        deduplicatedLines.push(line);
+      }
+    }
+    const envExampleContent = deduplicatedLines.join("\n") + "\n";
 
     yield* Effect.all(
       [
@@ -699,7 +766,7 @@ export const scaffold = (
     // Replace backlog manager template arguments in all text files (must run before label stripping)
     yield* substituteTemplateArgs(configDir, backlogManager);
 
-    // Strip --label Sandcastle from prompt files when the user declined label creation
+    // Strip --label ready-for-agent from prompt files when the user declined label creation
     if (!createLabel) {
       yield* rewritePromptFiles(configDir);
     }

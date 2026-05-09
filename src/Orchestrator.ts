@@ -127,9 +127,7 @@ const invokeAgent = (
           errorDetail = resultText;
         }
         if (!errorDetail.trim()) {
-          const lines = execResult.stdout
-            .split("\n")
-            .filter((l) => l.trim());
+          const lines = execResult.stdout.split("\n").filter((l) => l.trim());
           errorDetail = lines.slice(-20).join("\n");
         }
         return yield* Effect.fail(
@@ -308,6 +306,20 @@ export const orchestrate = (
                       ctx.sandboxRepoDir,
                     );
 
+                // Log prompt summary — first non-empty line + total char count
+                const promptFirstLine =
+                  fullPrompt.split("\n").find((l) => l.trim().length > 0) ?? "";
+                const promptPreview =
+                  promptFirstLine.length > 80
+                    ? `${promptFirstLine.substring(0, 80)}...`
+                    : promptFirstLine;
+                yield* display.status(
+                  label(
+                    `Prompt (${fullPrompt.length} chars): ${promptPreview}`,
+                  ),
+                  "info",
+                );
+
                 yield* display.status(label("Agent started"), "success");
 
                 // Invoke the agent — buffer text deltas so Pi's single-token
@@ -364,6 +376,25 @@ export const orchestrate = (
                 textBuffer.dispose();
 
                 yield* display.status(label("Agent stopped"), "info");
+
+                // Scan agent output for issue closure events
+                const issueMatches = [
+                  ...agentOutput.matchAll(
+                    /(?:closes?|closed|fixes?|fixed|resolves?|resolved)\s+#(\d+)/gi,
+                  ),
+                  ...agentOutput.matchAll(/gh issue close (\d+)/g),
+                ];
+                const updatedIssues = [
+                  ...new Set([...issueMatches].map((m) => m[1])),
+                ];
+                if (updatedIssues.length > 0) {
+                  yield* display.status(
+                    label(
+                      `Issues updated: ${updatedIssues.map((n) => `#${n}`).join(", ")}`,
+                    ),
+                    "success",
+                  );
+                }
 
                 // Capture session while sandbox is still alive
                 let sessionFilePath: string | undefined;

@@ -21,7 +21,11 @@ const TOOL_ARG_FIELDS: Record<string, string> = {
 const extractErrorMessage = (obj: any): string | undefined => {
   const err = obj.error;
   if (typeof err === "string") return err;
-  if (typeof err === "object" && err !== null && typeof err.message === "string") {
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    typeof err.message === "string"
+  ) {
     return err.message;
   }
   if (typeof obj.message === "string") return obj.message;
@@ -420,5 +424,147 @@ export const claudeCode = (
       }
     }
     return undefined;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// GitHub Copilot CLI agent provider
+// ---------------------------------------------------------------------------
+
+/**
+ * Argument field lookup for Copilot CLI tool names.
+ * Tool names are lowercase, unlike Claude Code's PascalCase names.
+ */
+const COPILOT_TOOL_ARG_FIELDS: Record<string, string> = {
+  bash: "command",
+  shell: "command",
+};
+
+const parseCopilotCliStreamLine = (line: string): ParsedStreamEvent[] => {
+  if (!line.startsWith("{")) return [];
+  try {
+    const obj = JSON.parse(line);
+
+    // Incremental text delta — emitted while the model streams its response
+    if (
+      obj.type === "assistant.message_delta" &&
+      typeof obj.data?.deltaContent === "string"
+    ) {
+      return [{ type: "text", text: obj.data.deltaContent }];
+    }
+
+    // Complete assistant message — treat full content as the iteration result
+    if (
+      obj.type === "assistant.message" &&
+      typeof obj.data?.content === "string"
+    ) {
+      return [{ type: "result", result: obj.data.content }];
+    }
+
+    // Tool call start — surface bash/shell command executions
+    if (
+      obj.type === "tool.execution_start" &&
+      typeof obj.data?.toolName === "string"
+    ) {
+      const toolName = obj.data.toolName as string;
+      const argField = COPILOT_TOOL_ARG_FIELDS[toolName];
+      if (argField !== undefined) {
+        const argValue = (
+          obj.data.arguments as Record<string, unknown> | undefined
+        )?.[argField];
+        if (typeof argValue === "string") {
+          return [{ type: "tool_call", name: toolName, args: argValue }];
+        }
+      }
+      return [];
+    }
+
+    // Session ID from the final result event — enables session resumption
+    if (obj.type === "result" && typeof obj.sessionId === "string") {
+      return [{ type: "session_id", sessionId: obj.sessionId }];
+    }
+  } catch {
+    // Not valid JSON — skip
+  }
+  return [];
+};
+
+/** Options for the copilotCli agent provider. */
+export interface CopilotCliOptions {
+  readonly effort?: "low" | "medium" | "high" | "xhigh";
+  /** Environment variables injected by this agent provider. */
+  readonly env?: Record<string, string>;
+}
+
+/**
+ * GitHub Copilot CLI agent provider.
+ *
+ * Runs the standalone `copilot` binary in non-interactive mode (`-p`) with
+ * JSONL output. `gh copilot` is a thin wrapper around the same binary; if
+ * `copilot` is already on PATH, it is used directly.
+ *
+ * Prerequisites inside the sandbox image:
+ *   - `gh` (GitHub CLI) installed — used to auto-download the `copilot` binary
+ *     on first run (to `~/.local/share/gh/copilot/`). That directory must be on PATH.
+ *   - `GH_TOKEN` env var: a GitHub PAT with Copilot and, optionally, repo access.
+ *   - Outbound network access in the container for the one-time binary download.
+ *
+ * Note: `copilot -p` does not accept `-` as a stdin alias, so the prompt is
+ * written to a temp file and expanded into the `-p` argument. Prompts larger
+ * than the shell's single-argument limit (~128 KB on Linux) will fail; typical
+ * Sandcastle prompts are well within this limit.
+ */
+export const copilotCli = (
+  model: string,
+  options?: CopilotCliOptions,
+): AgentProvider => ({
+  name: "copilot-cli",
+  env: options?.env ?? {},
+  captureSessions: false,
+
+  buildPrintCommand({
+    prompt,
+    dangerouslySkipPermissions,
+    resumeSession,
+  }: AgentCommandOptions): PrintCommand {
+    const modelFlag = ` --model ${shellEscape(model)}`;
+    const effortFlag = options?.effort
+      ? ` --effort ${shellEscape(options.effort)}`
+      : "";
+    // --allow-all-tools is required for non-interactive mode.
+    // --allow-all additionally grants unrestricted path and URL access.
+    const permsFlag = dangerouslySkipPermissions
+      ? " --allow-all"
+      : " --allow-all-tools";
+    const resumeFlag = resumeSession
+      ? ` --resume ${shellEscape(resumeSession)}`
+      : "";
+    // `copilot -p -` treats `-` as a literal string, not a stdin alias.
+    // Write stdin (the prompt) to a temp file first, then expand into -p.
+    return {
+      command:
+        `COPILOT_PROMPT_FILE=$(mktemp) && cat > "$COPILOT_PROMPT_FILE" && ` +
+        `copilot --output-format json --no-ask-user` +
+        `${modelFlag}${effortFlag}${permsFlag}${resumeFlag}` +
+        ` -p "$(cat "$COPILOT_PROMPT_FILE")"; ` +
+        `EC=$?; rm -f "$COPILOT_PROMPT_FILE"; exit $EC`,
+      stdin: prompt,
+    };
+  },
+
+  buildInteractiveArgs({
+    prompt,
+    dangerouslySkipPermissions,
+  }: AgentCommandOptions): string[] {
+    const args = ["copilot", "--model", model];
+    if (dangerouslySkipPermissions) args.push("--allow-all");
+    if (options?.effort) args.push("--effort", options.effort);
+    // -i starts interactive mode and auto-executes the given initial prompt
+    if (prompt) args.push("-i", prompt);
+    return args;
+  },
+
+  parseStreamLine(line: string): ParsedStreamEvent[] {
+    return parseCopilotCliStreamLine(line);
   },
 });

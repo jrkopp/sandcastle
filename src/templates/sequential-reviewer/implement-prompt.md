@@ -21,7 +21,9 @@ Work on issues in this order:
 3. **Polish** — improving existing functionality (error messages, UX, docs)
 4. **Refactors** — internal cleanups with no user-visible change
 
-Pick the highest-priority open issue that is not blocked by another open issue.
+**If the issue list above is empty, output the completion signal immediately — there is nothing to do.**
+
+Pick the highest-priority open issue that is not blocked by another open issue. Only pick an issue that appears in the list above — do not invent or select issues from any other source.
 
 ## Workflow
 
@@ -46,6 +48,6 @@ Pick the highest-priority open issue that is not blocked by another open issue.
 
 # Done
 
-When all actionable issues are complete (or you are blocked on all remaining ones), output the completion signal:
+When you have completed (or are blocked on) **the single issue you picked**, output the completion signal immediately — do not move on to any other issue:
 
 <promise>COMPLETE</promise>

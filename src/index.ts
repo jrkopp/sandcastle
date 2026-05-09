@@ -51,7 +51,13 @@ export type {
   OutputStringDefinition,
 } from "./Output.js";
 export { CwdError } from "./resolveCwd.js";
-export { claudeCode, codex, opencode, pi } from "./AgentProvider.js";
+export {
+  claudeCode,
+  codex,
+  opencode,
+  pi,
+  copilotCli,
+} from "./AgentProvider.js";
 export type {
   AgentProvider,
   AgentCommandOptions,
@@ -60,6 +66,7 @@ export type {
   CodexOptions,
   OpenCodeOptions,
   PiOptions,
+  CopilotCliOptions,
 } from "./AgentProvider.js";
 export {
   createBindMountSandboxProvider,

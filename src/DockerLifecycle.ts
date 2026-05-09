@@ -137,6 +137,15 @@ export const startContainer = (
       : [];
     const networkFlags = networks.flatMap((n) => ["--network", n]);
 
+    // Log the docker run command (env values redacted for security)
+    const redactedEnvFlags = Object.keys(env).flatMap((k) => [
+      "-e",
+      `${k}=***`,
+    ]);
+    console.error(
+      `[sandcastle] docker run -d --name ${containerName} ${[...redactedEnvFlags, ...volumeFlags, ...workdirFlags, ...userFlags, ...networkFlags, imageName].join(" ")}`,
+    );
+
     yield* dockerExec([
       "run",
       "-d",
@@ -158,6 +167,7 @@ export const removeContainer = (
   containerName: string,
 ): Effect.Effect<void, DockerError> =>
   Effect.gen(function* () {
+    console.error(`[sandcastle] Removing container: ${containerName}`);
     // Stop container (ignore errors if already stopped)
     yield* Effect.ignore(dockerExec(["stop", containerName]));
     // Remove container (ignore errors if not found)

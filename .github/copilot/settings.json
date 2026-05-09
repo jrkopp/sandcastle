@@ -1,0 +1,16 @@
+{
+  "allowTools": [
+    "shell(gh issue create:*)",
+    "shell(npx vitest run:*)",
+    "shell(gh repo view:*)",
+    "shell(gh issue view:*)",
+    "shell(git add:*)",
+    "shell(git status:*)",
+    "shell(git commit:*)",
+    "shell(npx tsgo:*)",
+    "shell(npm test:*)",
+    "shell(npm check:*)",
+    "shell(npm run typecheck:*)",
+    "shell(git merge sandcastle/*)"
+  ]
+}

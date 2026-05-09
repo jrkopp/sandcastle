@@ -245,13 +245,13 @@ const initCommand = Command.make(
         selectedTemplate = selected as string;
       }
 
-      // Offer to create the "Sandcastle" label on the repo (skip for non-GitHub backlog managers)
+      // Offer to create the "ready-for-agent" label on the repo (skip for non-GitHub backlog managers)
       let shouldCreateLabel: boolean | symbol = false;
       if (selectedBacklogManager.name === "github-issues") {
         shouldCreateLabel = yield* Effect.promise(() =>
           clack.confirm({
             message:
-              'Create a "Sandcastle" GitHub label? (Templates filter issues by this label)',
+              'Create a "ready-for-agent" GitHub label? (Templates filter issues by this label)',
             initialValue: true,
           }),
         );
@@ -260,7 +260,7 @@ const initCommand = Command.make(
           yield* Effect.try({
             try: () =>
               execSync(
-                'gh label create "Sandcastle" --description "Issues for Sandcastle to work on" --color "F9A825" 2>/dev/null',
+                'gh label create "ready-for-agent" --description "Fully specified, ready for an AFK agent" --color "0075ca" 2>/dev/null',
                 { cwd, stdio: "ignore" },
               ),
             catch: () => undefined,

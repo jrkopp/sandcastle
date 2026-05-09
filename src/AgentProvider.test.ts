@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { claudeCode, codex, opencode, pi } from "./AgentProvider.js";
+import {
+  claudeCode,
+  codex,
+  copilotCli,
+  opencode,
+  pi,
+} from "./AgentProvider.js";
 import type { AgentCommandOptions } from "./AgentProvider.js";
 
 /** Shorthand: build options with dangerouslySkipPermissions: true (mirrors existing sandbox callers). */
@@ -759,7 +765,9 @@ describe("opencode factory", () => {
   });
 
   it("buildPrintCommand shell-escapes the variant value", () => {
-    const provider = opencode("opencode/big-pickle", { variant: "it's tricky" });
+    const provider = opencode("opencode/big-pickle", {
+      variant: "it's tricky",
+    });
     const { command } = provider.buildPrintCommand(opts("test"));
     expect(command).toContain("--variant 'it'\\''s tricky'");
   });
@@ -948,6 +956,10 @@ describe("parseSessionUsage (Claude Code)", () => {
   it("is not defined on opencode provider", () => {
     expect(opencode("model").parseSessionUsage).toBeUndefined();
   });
+
+  it("is not defined on copilotCli provider", () => {
+    expect(copilotCli("model").parseSessionUsage).toBeUndefined();
+  });
 });
 
 describe("captureSessions flag", () => {
@@ -971,5 +983,274 @@ describe("captureSessions flag", () => {
 
   it("opencode has captureSessions false", () => {
     expect(opencode("opencode-model").captureSessions).toBe(false);
+  });
+
+  it("copilotCli has captureSessions false", () => {
+    expect(copilotCli("model").captureSessions).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// copilotCli factory
+// ---------------------------------------------------------------------------
+
+describe("copilotCli factory", () => {
+  it("returns a provider with name 'copilot-cli'", () => {
+    const provider = copilotCli("model");
+    expect(provider.name).toBe("copilot-cli");
+  });
+
+  it("does not expose envManifest or dockerfileTemplate", () => {
+    const provider = copilotCli("model");
+    expect(provider).not.toHaveProperty("envManifest");
+    expect(provider).not.toHaveProperty("dockerfileTemplate");
+  });
+
+  it("buildPrintCommand uses copilot binary directly", () => {
+    const provider = copilotCli("model");
+    const { command } = provider.buildPrintCommand(opts("do something"));
+    expect(command).toContain("copilot --output-format json");
+    expect(command).not.toContain("gh copilot");
+  });
+
+  it("buildPrintCommand includes the model and output-format flags", () => {
+    const provider = copilotCli("model");
+    const { command } = provider.buildPrintCommand(opts("do something"));
+    expect(command).toContain("model");
+    expect(command).toContain("--output-format json");
+    expect(command).toContain("--no-ask-user");
+  });
+
+  it("buildPrintCommand delivers prompt via stdin using temp file", () => {
+    const provider = copilotCli("model");
+    const { command, stdin } = provider.buildPrintCommand(opts("do something"));
+    expect(command).toContain('cat > "$COPILOT_PROMPT_FILE"');
+    expect(command).toContain("mktemp");
+    expect(command).not.toContain("'do something'");
+    expect(stdin).toBe("do something");
+  });
+
+  it("buildPrintCommand shell-escapes the model", () => {
+    const provider = copilotCli("model");
+    const { command } = provider.buildPrintCommand(opts("do something"));
+    expect(command).toContain("--model 'model'");
+  });
+
+  it("buildPrintCommand includes --allow-all when dangerouslySkipPermissions is true", () => {
+    const provider = copilotCli("model");
+    const { command } = provider.buildPrintCommand(opts("do something"));
+    expect(command).toContain("--allow-all");
+  });
+
+  it("buildPrintCommand includes --allow-all-tools (not --allow-all) when dangerouslySkipPermissions is false", () => {
+    const provider = copilotCli("model");
+    const { command } = provider.buildPrintCommand({
+      prompt: "do something",
+      dangerouslySkipPermissions: false,
+    });
+    expect(command).toContain("--allow-all-tools");
+    expect(command).not.toContain("--allow-all ");
+  });
+
+  it("buildPrintCommand includes --effort when specified", () => {
+    const provider = copilotCli("model", { effort: "high" });
+    const { command } = provider.buildPrintCommand(opts("do something"));
+    expect(command).toContain("--effort 'high'");
+  });
+
+  it("buildPrintCommand omits --effort when not specified", () => {
+    const provider = copilotCli("model");
+    const { command } = provider.buildPrintCommand(opts("do something"));
+    expect(command).not.toContain("--effort");
+  });
+
+  it("supports all effort levels", () => {
+    for (const effort of ["low", "medium", "high", "xhigh"] as const) {
+      const provider = copilotCli("model", { effort });
+      expect(provider.buildPrintCommand(opts("test")).command).toContain(
+        `--effort '${effort}'`,
+      );
+    }
+  });
+
+  it("buildPrintCommand includes --resume when resumeSession is set", () => {
+    const provider = copilotCli("model");
+    const { command } = provider.buildPrintCommand({
+      prompt: "do something",
+      dangerouslySkipPermissions: true,
+      resumeSession: "cf95d05c-41c7-45bc-a33b-973f3123895d",
+    });
+    expect(command).toContain(
+      "--resume 'cf95d05c-41c7-45bc-a33b-973f3123895d'",
+    );
+  });
+
+  it("buildPrintCommand omits --resume when resumeSession is not set", () => {
+    const provider = copilotCli("model");
+    const { command } = provider.buildPrintCommand(opts("do something"));
+    expect(command).not.toContain("--resume");
+  });
+
+  it("buildInteractiveArgs uses copilot binary directly", () => {
+    const provider = copilotCli("model");
+    const args = provider.buildInteractiveArgs!(opts("do something"));
+    expect(args[0]).toBe("copilot");
+  });
+
+  it("buildInteractiveArgs includes --model", () => {
+    const provider = copilotCli("model");
+    const args = provider.buildInteractiveArgs!(opts("do something"));
+    expect(args).toContain("--model");
+    expect(args).toContain("model");
+  });
+
+  it("buildInteractiveArgs includes -i with prompt", () => {
+    const provider = copilotCli("model");
+    const args = provider.buildInteractiveArgs!(opts("fix the bug"));
+    expect(args).toContain("-i");
+    expect(args).toContain("fix the bug");
+  });
+
+  it("buildInteractiveArgs includes --allow-all when dangerouslySkipPermissions is true", () => {
+    const provider = copilotCli("model");
+    const args = provider.buildInteractiveArgs!(opts("do something"));
+    expect(args).toContain("--allow-all");
+  });
+
+  it("buildInteractiveArgs omits --allow-all when dangerouslySkipPermissions is false", () => {
+    const provider = copilotCli("model");
+    const args = provider.buildInteractiveArgs!({
+      prompt: "do something",
+      dangerouslySkipPermissions: false,
+    });
+    expect(args).not.toContain("--allow-all");
+  });
+
+  it("parseStreamLine extracts text from assistant.message_delta", () => {
+    const provider = copilotCli("model");
+    const line = JSON.stringify({
+      type: "assistant.message_delta",
+      data: { messageId: "abc", deltaContent: "Hello world" },
+    });
+    expect(provider.parseStreamLine(line)).toEqual([
+      { type: "text", text: "Hello world" },
+    ]);
+  });
+
+  it("parseStreamLine extracts result from assistant.message", () => {
+    const provider = copilotCli("model");
+    const line = JSON.stringify({
+      type: "assistant.message",
+      data: {
+        messageId: "abc",
+        content: "Task complete.",
+        toolRequests: [],
+      },
+    });
+    expect(provider.parseStreamLine(line)).toEqual([
+      { type: "result", result: "Task complete." },
+    ]);
+  });
+
+  it("parseStreamLine extracts tool_call from tool.execution_start (bash)", () => {
+    const provider = copilotCli("model");
+    const line = JSON.stringify({
+      type: "tool.execution_start",
+      data: {
+        toolCallId: "toolu_01",
+        toolName: "bash",
+        arguments: { command: "echo hello", description: "Echo" },
+        turnId: "0",
+      },
+    });
+    expect(provider.parseStreamLine(line)).toEqual([
+      { type: "tool_call", name: "bash", args: "echo hello" },
+    ]);
+  });
+
+  it("parseStreamLine extracts tool_call from tool.execution_start (shell)", () => {
+    const provider = copilotCli("model");
+    const line = JSON.stringify({
+      type: "tool.execution_start",
+      data: {
+        toolCallId: "toolu_01",
+        toolName: "shell",
+        arguments: { command: "ls -la" },
+        turnId: "0",
+      },
+    });
+    expect(provider.parseStreamLine(line)).toEqual([
+      { type: "tool_call", name: "shell", args: "ls -la" },
+    ]);
+  });
+
+  it("parseStreamLine skips tool.execution_start for unknown tool names", () => {
+    const provider = copilotCli("model");
+    const line = JSON.stringify({
+      type: "tool.execution_start",
+      data: {
+        toolName: "report_intent",
+        arguments: { intent: "Running echo command" },
+      },
+    });
+    expect(provider.parseStreamLine(line)).toEqual([]);
+  });
+
+  it("parseStreamLine extracts session_id from result event", () => {
+    const provider = copilotCli("model");
+    const line = JSON.stringify({
+      type: "result",
+      sessionId: "cf95d05c-41c7-45bc-a33b-973f3123895d",
+      exitCode: 0,
+      usage: {},
+    });
+    expect(provider.parseStreamLine(line)).toEqual([
+      {
+        type: "session_id",
+        sessionId: "cf95d05c-41c7-45bc-a33b-973f3123895d",
+      },
+    ]);
+  });
+
+  it("parseStreamLine returns empty array for ephemeral/session events", () => {
+    const provider = copilotCli("model");
+    for (const type of [
+      "session.mcp_server_status_changed",
+      "session.tools_updated",
+      "assistant.turn_start",
+      "assistant.turn_end",
+      "tool.execution_complete",
+    ]) {
+      const line = JSON.stringify({ type, data: {} });
+      expect(provider.parseStreamLine(line)).toEqual([]);
+    }
+  });
+
+  it("parseStreamLine returns empty array for non-JSON lines", () => {
+    const provider = copilotCli("model");
+    expect(provider.parseStreamLine("plain text output")).toEqual([]);
+    expect(provider.parseStreamLine("")).toEqual([]);
+  });
+
+  it("parseStreamLine returns empty array for malformed JSON", () => {
+    const provider = copilotCli("model");
+    expect(provider.parseStreamLine("{bad json")).toEqual([]);
+  });
+
+  it("bakes model into each provider instance independently", () => {
+    const a = copilotCli("model-a");
+    const b = copilotCli("model-b");
+    expect(a.buildPrintCommand(opts("test")).command).toContain("'model-a'");
+    expect(b.buildPrintCommand(opts("test")).command).toContain("'model-b'");
+  });
+
+  it("accepts an env option and exposes it on the provider", () => {
+    const provider = copilotCli("model", { env: { GH_TOKEN: "ghp_test" } });
+    expect(provider.env).toEqual({ GH_TOKEN: "ghp_test" });
+  });
+
+  it("defaults env to empty object when not provided", () => {
+    const provider = copilotCli("model");
+    expect(provider.env).toEqual({});
   });
 });

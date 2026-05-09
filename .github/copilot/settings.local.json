@@ -1,0 +1,40 @@
+{
+  "allowTools": [
+    "shell(gh issue create *)",
+    "shell(npx vitest run *)",
+    "shell(gh repo view *)",
+    "shell(git add:*)",
+    "shell(git commit:*)",
+    "shell(npx tsgo:*)",
+    "shell(npm test:*)",
+    "shell(npm check:*)",
+    "shell(gh label:*)",
+    "shell(npx -p typescript tsc --noEmit)",
+    "shell(gh issue list *)",
+    "shell(gh issue view *)",
+    "shell(gh issue edit * --add-label *)",
+    "shell(gh pr view *)",
+    "shell(gh pr list *)",
+    "shell(gh pr diff *)",
+    "shell(git diff:*)",
+
+    // === Web / Search tools ===
+    "web_fetch",
+    "WebFetch", // sometimes both variants work
+    "web_search",
+    "WebSearch",
+
+    // Domain-specific URL access (recommended)
+    "url(www.aihero.dev)",
+    "url(worktrunk.dev)",
+    "url(github.com)",
+    "url(www.superagent.sh)",
+    "url(www.koyeb.com)",
+    "url(www.daytona.io)",
+    "url(www.npmjs.com)",
+    "url(vercel.com)"
+
+    // Wildcard domain example (very useful)
+    // "url(*.aihero.dev)"
+  ]
+}

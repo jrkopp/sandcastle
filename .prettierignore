@@ -1,3 +1,4 @@
 dist
 node_modules
 .changeset
+.github/copilot-instructions.md

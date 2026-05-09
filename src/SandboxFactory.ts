@@ -364,6 +364,12 @@ export const WorktreeDockerSandboxFactory = {
               // Acquire: prune stale worktrees, create worktree, run host hooks, then start sandbox
               pruneAndCreate().pipe(
                 Effect.tap((worktreeInfo) =>
+                  display.status(
+                    `Worktree created: ${worktreeInfo.path}`,
+                    "info",
+                  ),
+                ),
+                Effect.tap((worktreeInfo) =>
                   hooks?.host?.onWorktreeReady?.length
                     ? runHostHooks(
                         hooks.host.onWorktreeReady,
@@ -373,19 +379,24 @@ export const WorktreeDockerSandboxFactory = {
                     : Effect.void,
                 ),
                 Effect.flatMap((worktreeInfo) =>
-                  startSandbox({
-                    provider: sandboxProvider,
-                    hostRepoDir: worktreeInfo.path,
-                    env,
-                    copyPaths,
-                  }).pipe(
-                    Effect.map(({ handle, sandboxLayer, worktreePath }) => ({
-                      worktreeInfo,
-                      handle,
-                      sandboxLayer,
-                      worktreePath,
-                    })),
-                  ),
+                  display
+                    .spinner(
+                      "Starting container",
+                      startSandbox({
+                        provider: sandboxProvider,
+                        hostRepoDir: worktreeInfo.path,
+                        env,
+                        copyPaths,
+                      }),
+                    )
+                    .pipe(
+                      Effect.map(({ handle, sandboxLayer, worktreePath }) => ({
+                        worktreeInfo,
+                        handle,
+                        sandboxLayer,
+                        worktreePath,
+                      })),
+                    ),
                 ),
               ),
               // Use
@@ -402,10 +413,13 @@ export const WorktreeDockerSandboxFactory = {
                 >,
               // Release: close handle, then cleanup worktree
               ({ worktreeInfo, handle }, exit) =>
-                Effect.tryPromise({
-                  try: () => handle.close(),
-                  catch: () => undefined,
-                }).pipe(
+                display.status("Stopping container", "info").pipe(
+                  Effect.andThen(
+                    Effect.tryPromise({
+                      try: () => handle.close(),
+                      catch: () => undefined,
+                    }),
+                  ),
                   Effect.andThen(cleanupWorktree(worktreeInfo.path, exit)),
                   Effect.tap((p) => {
                     preservedPath = p;
@@ -457,14 +471,17 @@ export const WorktreeDockerSandboxFactory = {
               ),
               Effect.flatMap((gitMounts) =>
                 Effect.acquireUseRelease(
-                  startSandbox({
-                    provider: sandboxProvider,
-                    hostRepoDir,
-                    env,
-                    worktreeOrRepoPath: hostRepoDir,
-                    gitMounts,
-                    repoDir: SANDBOX_REPO_DIR,
-                  }),
+                  display.spinner(
+                    "Starting container",
+                    startSandbox({
+                      provider: sandboxProvider,
+                      hostRepoDir,
+                      env,
+                      worktreeOrRepoPath: hostRepoDir,
+                      gitMounts,
+                      repoDir: SANDBOX_REPO_DIR,
+                    }),
+                  ),
                   // Use
                   ({ sandboxLayer, worktreePath, handle }) =>
                     makeEffect({
@@ -478,10 +495,15 @@ export const WorktreeDockerSandboxFactory = {
                     >,
                   // Release
                   ({ handle }) =>
-                    Effect.tryPromise({
-                      try: () => handle.close(),
-                      catch: () => undefined,
-                    }).pipe(Effect.orDie),
+                    display.status("Stopping container", "info").pipe(
+                      Effect.andThen(
+                        Effect.tryPromise({
+                          try: () => handle.close(),
+                          catch: () => undefined,
+                        }),
+                      ),
+                      Effect.orDie,
+                    ),
                 ).pipe(
                   Effect.map((value) => ({
                     value,
@@ -500,11 +522,22 @@ export const WorktreeDockerSandboxFactory = {
           return Effect.acquireUseRelease(
             // Acquire: prune stale worktrees (best-effort), create worktree, run host hooks, then start sandbox
             pruneAndCreate().pipe(
+              Effect.tap((worktreeInfo) =>
+                display.status(
+                  `Worktree created: ${worktreeInfo.path}`,
+                  "info",
+                ),
+              ),
               Effect.flatMap((worktreeInfo) =>
                 (copyPaths && copyPaths.length > 0
                   ? display.spinner(
                       "Copying to worktree",
-                      copyToWorktree(copyPaths, hostRepoDir, worktreeInfo.path, timeouts?.copyToWorktreeMs),
+                      copyToWorktree(
+                        copyPaths,
+                        hostRepoDir,
+                        worktreeInfo.path,
+                        timeouts?.copyToWorktreeMs,
+                      ),
                     )
                   : Effect.succeed(undefined)
                 ).pipe(Effect.map(() => worktreeInfo)),
@@ -549,23 +582,29 @@ export const WorktreeDockerSandboxFactory = {
                     ): Effect.Effect<AcquireResult, SandboxError, never> =>
                       // sandboxProvider is guaranteed bind-mount here
                       // (isolated providers return early above)
-                      startSandbox({
-                        provider: sandboxProvider as BindMountSandboxProvider,
-                        hostRepoDir,
-                        env,
-                        worktreeOrRepoPath: worktreeInfo.path,
-                        gitMounts,
-                        repoDir: SANDBOX_REPO_DIR,
-                      }).pipe(
-                        Effect.map(
-                          ({ handle, sandboxLayer, worktreePath }) => ({
-                            worktreeInfo,
-                            handle,
-                            sandboxLayer,
-                            worktreePath,
+                      display
+                        .spinner(
+                          "Starting container",
+                          startSandbox({
+                            provider:
+                              sandboxProvider as BindMountSandboxProvider,
+                            hostRepoDir,
+                            env,
+                            worktreeOrRepoPath: worktreeInfo.path,
+                            gitMounts,
+                            repoDir: SANDBOX_REPO_DIR,
                           }),
+                        )
+                        .pipe(
+                          Effect.map(
+                            ({ handle, sandboxLayer, worktreePath }) => ({
+                              worktreeInfo,
+                              handle,
+                              sandboxLayer,
+                              worktreePath,
+                            }),
+                          ),
                         ),
-                      ),
                   ),
                 );
               }),
@@ -583,10 +622,13 @@ export const WorktreeDockerSandboxFactory = {
               >,
             // Release: close provider handle, then remove/preserve worktree based on dirty state.
             ({ worktreeInfo, handle }, exit) =>
-              Effect.tryPromise({
-                try: () => handle.close(),
-                catch: () => undefined,
-              }).pipe(
+              display.status("Stopping container", "info").pipe(
+                Effect.andThen(
+                  Effect.tryPromise({
+                    try: () => handle.close(),
+                    catch: () => undefined,
+                  }),
+                ),
                 Effect.andThen(cleanupWorktree(worktreeInfo.path, exit)),
                 Effect.tap((p) => {
                   preservedWorktreePath = p;

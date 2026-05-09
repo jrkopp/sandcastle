@@ -12,7 +12,7 @@ export const SKELETON_PROMPT =
   "`" +
   ` or !` +
   "`" +
-  `gh issue list --label Sandcastle --json number,title` +
+  `gh issue list --label ready-for-agent --json number,title` +
   "`" +
   ` -->
 
